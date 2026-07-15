@@ -1,0 +1,320 @@
+STA4173 – Final Project
+Diabetes Health Indicators Analysis
+By Jack Griffin
+
+Goals of this analysis:
+1) Explore diabetes prevalence and key lifestyle/demographic risk factors
+2) Build a multinomial logistic regression model (3-category outcome)
+3) Build a binary logistic regression model (collapsed outcome)
+4) Compare model performance and interpretability
+
+# STEP ONE: Setup -- Packages & Libraries
+```{r}
+# Run this install line ONCE if needed (uncomment it)
+# install.packages(c("tidyverse","nnet","car","caret","janitor","gridExtra","corrplot","pscl","pROC"))
+
+library(tidyverse)   # ggplot2, dplyr, etc.
+library(nnet)        # multinomial logistic regression
+library(car)         # VIF
+library(caret)       # confusion matrix / model metrics
+library(janitor)     # frequency tables
+library(gridExtra)   # arranging multiple plots
+library(corrplot)    # correlation heatmap
+library(pscl)        # pseudo R-squared
+library(pROC)        # ROC curves
+```
+
+# STEP TWO: Load & Check Dataset
+```{r}
+# Load CSV dataset (make sure it's in your working directory)
+# df <- read.csv("diabetes_012_health_indicators_BRFSS2015.csv")
+# Uncomment the above line to load in data. I was having issues so I am using file.choose.
+
+df <- read.csv(file.choose())
+
+
+# Convert outcome variable to labeled factor
+df$Diabetes_012 <- factor(df$Diabetes_012,
+                          levels = c(0, 1, 2),
+                          labels = c("NoDiabetes", "Prediabetes", "Diabetes"))
+
+# Basic structure checks
+dim(df)         # number of rows and columns
+names(df)       # variable names
+glimpse(df)     # types and preview
+summary(df)     # quick descriptive stats
+
+# Total missing values
+sum(is.na(df))
+```
+
+# STEP THREE: Explore Continuous / Ordinal Variables (Summary Statistics)
+```{r}
+# The only variables appropriate for numerical summary stats in the dataset: BMI, Age, GenHlth, PhysHlth, MentHlth, Education, Income.
+
+# Select continuous and ordinal variables
+cont_vars <- c("BMI","Age","GenHlth","PhysHlth",
+               "MentHlth","Education","Income")
+
+# Generate summary statistics
+df %>%
+  select(all_of(cont_vars)) %>%
+  summary()
+```
+
+# STEP FOUR: Explore Binary Variables (Frequency Tables)
+```{r}
+binary_vars <- c("HighBP","HighChol","CholCheck","Smoker",
+                 "Stroke","HeartDiseaseorAttack","PhysActivity",
+                 "Fruits","Veggies","HvyAlcoholConsump",
+                 "AnyHealthcare","NoDocbcCost","DiffWalk","Sex")
+
+# Frequency tables for each binary predictor
+freq_tables <- lapply(binary_vars, function(v){
+  janitor::tabyl(df[[v]]) %>% 
+    janitor::adorn_percentages("col") %>% 
+    janitor::adorn_pct_formatting(digits = 1)
+})
+
+names(freq_tables) <- binary_vars
+freq_tables
+```
+
+# STEP FIVE: Response Variable Distribution (Diabetes Status)
+```{r}
+df %>% 
+  count(Diabetes_012) %>% 
+  janitor::adorn_totals("row")
+```
+
+# STEP SIX: Histograms for Key Continuous Variables
+```{r}
+# BMI distribution
+ggplot(df, aes(x = BMI)) +
+  geom_histogram(bins = 40, fill = "steelblue", color = "white") +
+  labs(title = "BMI Distribution", x = "BMI", y = "Count")
+
+# Physical health days distribution
+ggplot(df, aes(x = PhysHlth)) +
+  geom_histogram(bins = 40, fill = "steelblue", color = "white") +
+  labs(title = "Physical Health Days Distribution", x = "PhysHlth", y = "Count")
+
+# Mental health days distribution
+ggplot(df, aes(x = MentHlth)) +
+  geom_histogram(bins = 40, fill = "steelblue", color = "white") +
+  labs(title = "Mental Health Days Distribution", x = "MentHlth", y = "Count")
+```
+
+# STEP SEVEN: Bar Plots for Ordinal Predictors
+```{r}
+# Education distribution
+ggplot(df, aes(x = factor(Education))) +
+  geom_bar(fill = "darkorange") +
+  labs(title = "Education Level Distribution", x = "Education Level", y = "Count")
+
+# Income distribution
+ggplot(df, aes(x = factor(Income))) +
+  geom_bar(fill = "darkorange") +
+  labs(title = "Income Level Distribution", x = "Income Level", y = "Count")
+
+# General Health distribution
+ggplot(df, aes(x = factor(GenHlth))) +
+  geom_bar(fill = "darkorange") +
+  labs(title = "General Health Rating (1=Excellent, 5=Poor)",
+       x = "GenHlth Category", y = "Count")
+```
+
+# STEP EIGHT: Bar Plots for Binary Predictors
+```{r}
+# Smoking status
+ggplot(df, aes(x = factor(Smoker))) +
+  geom_bar(fill = "purple") +
+  labs(title = "Smoking Status", x = "Smoker (0/1)", y = "Count")
+
+# Physical activity
+ggplot(df, aes(x = factor(PhysActivity))) +
+  geom_bar(fill = "purple") +
+  labs(title = "Physical Activity", x = "PhysActivity (0/1)", y = "Count")
+
+# High blood pressure
+ggplot(df, aes(x = factor(HighBP))) +
+  geom_bar(fill = "purple") +
+  labs(title = "High Blood Pressure", x = "HighBP (0/1)", y = "Count")
+```
+
+# STEP NINE: Correlation Heatmap for Numeric Variables
+```{r}
+numeric_vars <- df %>%
+  select(BMI, Age, HighBP, HighChol, GenHlth, PhysHlth, MentHlth)
+
+corr_matrix <- cor(numeric_vars)
+
+corrplot(corr_matrix, method = "color",
+         addCoef.col = "black", tl.col = "black")
+```
+
+# STEP TEN: Train/Test Split for Model Building
+```{r}
+set.seed(123)   # for reproducibility
+
+# Create training index
+train_index <- createDataPartition(df$Diabetes_012, p = 0.7, list = FALSE)
+
+# Split data
+train <- df[train_index, ]
+test  <- df[-train_index, ]
+
+dim(train)
+dim(test)
+```
+
+# STEP ELEVEN: Rebalance training data to fix class imbalance
+```{r}
+train_bal <- upSample(
+  x = train %>% select(-Diabetes_012),   # predictors only
+  y = train$Diabetes_012                 # outcome
+)
+
+# Renames the outcome column to "Class"
+train_bal$Class <- factor(train_bal$Class,
+                          levels = c("NoDiabetes","Prediabetes","Diabetes"))
+```
+
+# STEP TWELVE: Fit the Multinomial Logistic Regression Model
+```{r}
+# Fit multinomial logistic regression
+model_multi <- multinom(
+  Class ~ BMI + Age + PhysActivity + Smoker +
+    HighBP + HighChol + GenHlth + PhysHlth + MentHlth +
+    DiffWalk + Income + Education,
+  data = train_bal,
+  trace = FALSE)
+
+summary(model_multi)
+```
+
+# STEP THIRTEEN: Convert Coefficients to Odd Ratios
+```{r}
+# Extract coefficients
+coef_multi <- coef(model_multi)
+
+# Convert to odds ratios
+OR_multi <- exp(coef_multi)
+
+OR_multi
+```
+
+# STEP FOURTEEN: Model Predictions on Test Set
+```{r}
+# Predict class probabilities
+pred_probs <- predict(model_multi, newdata = test, type = "probs")
+
+# Predict class labels
+pred_class <- predict(model_multi, newdata = test)
+```
+
+# STEP FIFTEEN: Confusion Matrix & Accuracy
+```{r}
+conf_matrix <- confusionMatrix(as.factor(pred_class),
+                               as.factor(test$Diabetes_012))
+
+conf_matrix
+```
+
+# STEP SIXTEEN: Pseudo R-squared (Model Fit)
+```{r}
+# Fit intercept-only null model
+null_model <- multinom(Class ~ 1, data = train_bal, trace = FALSE)
+
+# Extract deviances
+ll_null <- null_model$deviance
+ll_full <- model_multi$deviance
+
+# McFadden's Pseudo R²
+pseudo_R2 <- 1 - (ll_full / ll_null)
+pseudo_R2
+```
+
+# STEP SEVENTEEN: Check Multicollinearity (VIF)
+```{r}
+vif_values <- car::vif(model_multi)
+vif_values
+```
+
+# STEP EIGHTEEN: Create the Binary Outcome Variable for Binary Model
+```{r}
+# Create binary outcome: 0 = NoDiabetes, 1 = Prediabetes/Diabetes
+df$Diabetes_binary <- ifelse(df$Diabetes_012 == "NoDiabetes", 0, 1)
+df$Diabetes_binary <- factor(df$Diabetes_binary)
+```
+
+# STEP NINETEEN: Train/Test Split for Binary Model
+```{r}
+set.seed(123)
+
+train_index_bin <- createDataPartition(df$Diabetes_binary, p = 0.7, list = FALSE)
+
+train_bin <- df[train_index_bin, ]
+test_bin  <- df[-train_index_bin, ]
+
+dim(train_bin)
+dim(test_bin)
+```
+
+# STEP TWENTY: Fit Binary Logistic Regression Model
+```{r}
+model_bin <- glm(
+  Diabetes_binary ~ BMI + Age + PhysActivity + Smoker +
+    HighBP + HighChol + GenHlth + PhysHlth + MentHlth +
+    DiffWalk + Income + Education,
+  data = train_bin,
+  family = binomial)
+
+summary(model_bin)
+```
+
+# STEP TWENTY ONE: Convert Coefficients to Odds Ratios (Binary Model)
+```{r}
+coef_bin <- coef(model_bin)
+OR_bin <- exp(coef_bin)
+
+OR_bin
+```
+
+# STEP TWENTY TWO: Binary Model Predictions on Test Set
+```{r}
+# Predict probabilities and class labels
+pred_probs_bin <- predict(model_bin, newdata = test_bin, type = "response")
+pred_class_bin <- ifelse(pred_probs_bin > 0.5, 1, 0)
+
+pred_class_bin <- factor(pred_class_bin, levels = c(0,1))
+```
+
+# STEP TWENTY THREE: Confusion Matrix & Accuracy
+```{r}
+conf_matrix_bin <- confusionMatrix(
+  pred_class_bin,
+  test_bin$Diabetes_binary)
+
+conf_matrix_bin
+```
+
+# STEP TWENTY FOUR: ROC Curve & AUC
+```{r}
+# ROC curve
+roc_obj <- roc(test_bin$Diabetes_binary, pred_probs_bin)
+plot(roc_obj, col = "blue", main = "ROC Curve for Binary Logistic Regression")
+
+# Pulling AUC value
+auc_value <- auc(roc_obj)
+auc_value
+```
+
+# STEP TWENTY FIVE: Psuedo R-squared for Binary Model
+```{r}
+ll_null_bin <- glm(Diabetes_binary ~ 1, data = train_bin, family = binomial)$deviance
+ll_full_bin <- model_bin$deviance
+
+pseudo_R2_bin <- 1 - (ll_full_bin / ll_null_bin)
+pseudo_R2_bin
+```
