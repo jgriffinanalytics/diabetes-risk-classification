@@ -1,6 +1,6 @@
 # Diabetes Risk Classification: Comparing Two Modeling Approaches
 
-This project compared two models of predicting diabetes risk using 253,680 records from a CDC health survey. A binary model (at-risk vs. not at-risk) reached **84.7% accuracy with an AUC of 0.81**, clearly beating a three-category model (64.8% accuracy) that attempted to separate prediabetes from diabetes. The main takeaway: if accuracy is your desired metric, the binary model is the better tool.
+This project compared two models for predicting diabetes risk using 253,680 records from a CDC health survey. A binary model (at-risk vs. not at-risk) reached **84.7% accuracy with an AUC of 0.81**, clearly beating a three-category model (64.8% accuracy) that attempted to separate prediabetes from diabetes. The main takeaway: if accuracy is your desired metric, the binary model is the better tool.
 
 ## Business Problem
 
