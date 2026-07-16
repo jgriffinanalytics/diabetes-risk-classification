@@ -27,7 +27,7 @@ More than 38 million U.S. adults have diabetes, and catching at-risk people earl
 
 ## Key Findings
 
-- **The simpler model won.** Combining prediabetes and diabetes into one "at-risk" group gave up some detail but gained about 20 points of accuracy. For a broad screening tool that prioritzes accuracy, that is a worthy trade.
+- **The simpler model performed better.** Combining prediabetes and diabetes into one "at-risk" group gave up some detail but gained about 20 points of accuracy. For a broad screening tool that prioritzes accuracy, that is a worthy trade.
 - **The risk factors matched the medical research.** Higher BMI, older age, high blood pressure, high cholesterol, difficulty walking, and worse general health all raised diabetes risk. Physical activity, education, and income lowered it. Both models agreed, which builds confidence in the results.
 - **The main limitation is imbalanced data.** The model is very good at identifying people without diabetes (97% sensitivity) but weaker at flagging the smaller at-risk group. This is a well-known challenge with health data, and it is what the future work below targets.
 
