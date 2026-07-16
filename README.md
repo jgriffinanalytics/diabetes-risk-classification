@@ -1,41 +1,41 @@
-# Diabetes Risk Classification: Multinomial vs. Binary Logistic Regression
+# Diabetes Risk Classification: Comparing Two Modeling Approaches
 
-Compared two classification strategies on **253,680 CDC health survey records** to predict diabetes risk. The binary logistic regression model won decisively — **84.7% accuracy and an AUC of 0.81** versus 64.8% accuracy for the three-class multinomial approach — quantifying the trade-off between diagnostic granularity and predictive power.
+This project compared two models of predicting diabetes risk using 253,680 records from a CDC health survey. A binary model (at-risk vs. not at-risk) reached **84.7% accuracy with an AUC of 0.81**, clearly beating a three-category model (64.8% accuracy) that attempted to separate prediabetes from diabetes. The main takeaway: if accuracy is your metric of interest, the binary model is the better tool.
 
 ## Business Problem
 
-Diabetes affects more than 38 million U.S. adults, and early identification of at-risk individuals — especially those in the transitional prediabetes state — is a public health priority where intervention can prevent progression to Type 2 diabetes. This project asks a practical modeling question with real screening implications: does separating prediabetes into its own class (multinomial model) add enough insight to justify its cost in accuracy, or is a simpler at-risk/not-at-risk classification (binary model) the better screening tool?
+More than 38 million U.S. adults have diabetes, and catching at-risk people early, especially those with prediabetes, can prevent the disease from progressing. This project tested a practical question: is it worth building a more complicated model that treats prediabetes as its own category, or does a simpler yes/no risk model do a better job? The answer matters for anyone designing a health screening tool.
 
 ## Data
 
-- **Source:** [Diabetes Health Indicators — BRFSS 2015 (Kaggle)](https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset) — CDC Behavioral Risk Factor Surveillance System
-- **Size:** 253,680 complete observations (no missing values), nationally representative survey
-- **Features:** BMI, age, high blood pressure, high cholesterol, physical activity, smoking, general/physical/mental health ratings, difficulty walking, education, income
-- **Target:** diabetes status — No Diabetes / Prediabetes / Diabetes (collapsed to at-risk vs. not for the binary model)
+- **Source:** [Diabetes Health Indicators, BRFSS 2015 (Kaggle)](https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset), from the CDC's annual national health survey
+- **Size:** 253,680 complete records with no missing values
+- **Features:** BMI, age, high blood pressure, high cholesterol, physical activity, smoking, self-reported health ratings, difficulty walking, education, income
+- **Target:** diabetes status (No Diabetes / Prediabetes / Diabetes, combined into at-risk vs. not for the binary model)
 
 ## Approach
 
-1. **Literature grounding:** Reviewed three peer-reviewed BRFSS studies (Okwechime et al. 2015; Yang et al. 2010; Ullah et al. 2022) to justify predictor selection and the multinomial-vs-binary comparison design.
-2. **EDA:** Descriptive statistics, frequency tables, and a correlation heatmap confirmed meaningful predictor variability and no multicollinearity (all correlations < 0.60), supporting full-model estimation without stepwise selection.
-3. **Class imbalance handling:** The prediabetes class was severely underrepresented; up-sampling the training data rebalanced multinomial performance across classes.
-4. **Modeling:** Multinomial logistic regression (`nnet`) vs. binary logistic regression, evaluated on accuracy, McFadden's pseudo R², and AUC (`pROC`).
+1. **Research:** Reviewed three published studies that used this same survey data to ensure variable and model selection lined up with what is typically recognized in real public health research.
+2. **Exploratory analysis:** Summary statistics and a correlation heatmap confirmed the predictors were usable and not too correlated with each other (all correlations under 0.60), so all predictors were included.
+3. **Handling imbalance:** Very few people in the data had prediabetes compared to the other groups, which made it hard for the model to learn that category. Up-sampling the training data balanced this out.
+4. **Modeling:** Fit a multinomial logistic regression (three categories, using `nnet`) and a binary logistic regression, then compared them on accuracy, model fit (pseudo R²), and AUC.
 
 | Model | Accuracy | Pseudo R² | AUC |
 |---|---|---|---|
-| Multinomial (3-class, up-sampled) | 0.648 | 0.128 | — |
+| Multinomial (3 categories) | 0.648 | 0.128 | — |
 | **Binary (at-risk vs. not)** | **0.847** | **0.199** | **0.813** |
 
 ## Key Findings
 
-- **The binary model is the better screening tool.** Collapsing prediabetes and diabetes into one at-risk class traded diagnostic detail for a 20-point accuracy gain and substantially better model fit — the right trade for a population-level screening context.
-- **Risk factors replicated the epidemiology literature.** Odds ratios showed BMI, age, high blood pressure, high cholesterol, difficulty walking, and worse general health all increased diabetes risk, while physical activity, education, and income were protective — consistent across both models, which strengthens confidence in the estimates.
-- **Class imbalance is the honest limitation.** The binary model detects non-diabetic individuals with 97% sensitivity but struggles on the minority at-risk class — a known challenge with imbalanced health data that motivates the resampling and ensemble methods listed in future work.
+- **The simpler model won.** Combining prediabetes and diabetes into one "at-risk" group gave up some detail but gained about 20 points of accuracy. For a broad screening tool that prioritzes accuracy, that is a worthy trade.
+- **The risk factors matched the medical research.** Higher BMI, older age, high blood pressure, high cholesterol, difficulty walking, and worse general health all raised diabetes risk. Physical activity, education, and income lowered it. Both models agreed, which builds confidence in the results.
+- **The main limitation is imbalanced data.** The model is very good at identifying people without diabetes (97% sensitivity) but weaker at flagging the smaller at-risk group. This is a well-known challenge with health data, and it is what the future work below targets.
 
-**BMI varies widely across respondents, making it a strong candidate predictor:**
+**BMI varies a lot across respondents, which makes it a useful predictor:**
 
 ![BMI distribution](images/fig1_bmi_distribution.png)
 
-**No multicollinearity among predictors (all correlations below 0.60):**
+**No predictors were too strongly correlated to use together:**
 
 ![Correlation heatmap](images/fig2_correlation_heatmap.png)
 
@@ -45,18 +45,18 @@ Diabetes affects more than 38 million U.S. adults, and early identification of a
 
 ## Tools
 
-**R** — tidyverse (ggplot2, dplyr), caret, nnet, pROC, pscl, car, corrplot, janitor, gridExtra
+**R**: tidyverse (ggplot2, dplyr), caret, nnet, pROC, pscl, car, corrplot, janitor, gridExtra
 
 ## Repository Contents
 
-- [`diabetes_project_script.Rmd`](diabetes_project_script.Rmd) — full analysis code (EDA → modeling → evaluation)
-- [`diabetes_health_indicators_dataset.csv`](diabetes_health_indicators_dataset.csv) — dataset
-- [`diabetes_project_final_report.pdf`](diabetes_project_final_report.pdf) — complete written report with literature review
-- [`images/`](images/) — figures referenced above
+- [`diabetes_project_script.Rmd`](diabetes_project_script.Rmd): full analysis code
+- [`diabetes_health_indicators_dataset.csv`](diabetes_health_indicators_dataset.csv): dataset
+- [`diabetes_project_final_report.pdf`](diabetes_project_final_report.pdf): complete written report with literature review
+- [`images/`](images/): figures shown above
 
 ## Future Work
 
-Alternative resampling strategies (SMOTE), interaction terms, and benchmarking logistic regression against tree-based and ensemble methods to improve minority-class recall.
+Test other ways of balancing the data (like SMOTE), add interaction terms, and compare logistic regression against tree-based models to improve detection of the at-risk group.
 
 ---
 
